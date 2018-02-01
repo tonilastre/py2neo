@@ -292,7 +292,7 @@ class Subgraph(object):
         return Subgraph(n, r)
 
     def __db_create__(self, tx):
-        from py2neo.database.cypher import cypher_escape
+        from py2neo.database.cypher import cypher_escape, cypher_repr
         nodes = list(self.nodes())
         reads = []
         writes = []
@@ -303,12 +303,14 @@ class Subgraph(object):
             param_id = "x%d" % i
             remote_node = remote(node)
             if remote_node:
-                reads.append("MATCH (%s) WHERE id(%s)={%s}" % (node_id, node_id, param_id))
+                reads.append("MATCH (%s) WHERE id(%s)=$%s" % (node_id, node_id, param_id))
                 parameters[param_id] = remote_node._id
             else:
                 label_string = "".join(":" + cypher_escape(label)
                                        for label in sorted(node.labels()))
-                writes.append("CREATE (%s%s {%s})" % (node_id, label_string, param_id))
+
+                params = cypher_repr(dict(self))
+                writes.append("CREATE (%s%s {%s})" % (node_id, label_string, params))
                 parameters[param_id] = dict(node)
                 node._set_remote_pending(tx)
             returns[node_id] = node
@@ -319,7 +321,7 @@ class Subgraph(object):
                 end_node_id = "a%d" % nodes.index(relationship.end_node())
                 type_string = cypher_escape(relationship.type())
                 param_id = "y%d" % i
-                writes.append("CREATE UNIQUE (%s)-[%s:%s]->(%s) SET %s={%s}" %
+                writes.append("CREATE UNIQUE (%s)-[%s:%s]->(%s) SET %s=$%s" %
                               (start_node_id, rel_id, type_string, end_node_id, rel_id, param_id))
                 parameters[param_id] = dict(relationship)
                 returns[rel_id] = relationship
@@ -392,7 +394,7 @@ class Subgraph(object):
             param_id = "x%d" % i
             remote_node = remote(node)
             if remote_node:
-                match_clauses.append("MATCH (%s) WHERE id(%s)={%s}" % (node_id, node_id, param_id))
+                match_clauses.append("MATCH (%s) WHERE id(%s)=$%s" % (node_id, node_id, param_id))
                 parameters[param_id] = remote_node._id
             else:
                 merge_label = getattr(node, "__primarylabel__", None) or primary_label
@@ -421,7 +423,7 @@ class Subgraph(object):
                         node_id, "".join(":" + cypher_escape(label)
                                          for label in sorted(node.labels()))))
                 if merge_keys:
-                    merge_clauses.append("SET %s={%s}" % (node_id, param_id))
+                    merge_clauses.append("SET %s=$%s" % (node_id, param_id))
                     parameters[param_id] = dict(node)
                 node._set_remote_pending(tx)
             returns[node_id] = node
@@ -433,7 +435,7 @@ class Subgraph(object):
                 end_node_id = "a%d" % nodes.index(relationship.end_node())
                 type_string = cypher_escape(relationship.type())
                 param_id = "y%d" % i
-                clauses.append("MERGE (%s)-[%s:%s]->(%s) SET %s={%s}" %
+                clauses.append("MERGE (%s)-[%s:%s]->(%s) SET %s=$%s" %
                                (start_node_id, rel_id, type_string, end_node_id, rel_id, param_id))
                 parameters[param_id] = dict(relationship)
                 returns[rel_id] = relationship
@@ -493,7 +495,7 @@ class Subgraph(object):
                 rel_id = "r%d" % i
                 param_id = "y%d" % i
                 matches.append("MATCH ()-[%s]->() "
-                               "WHERE id(%s)={%s}" % (rel_id, rel_id, param_id))
+                               "WHERE id(%s)=$%s" % (rel_id, rel_id, param_id))
                 deletes.append("DELETE %s" % rel_id)
                 parameters[param_id] = remote_relationship._id
                 del relationship.__remote__
@@ -923,6 +925,34 @@ class Node(Relatable, Entity):
     def update_labels(self, labels):
         self.__ensure_labels()
         self.__labels.update(labels)
+
+    def primary_labels_str(self):
+        from py2neo.database.cypher import cypher_escape
+        """Returns labels as :Label1:Label2"""
+        merge_label = getattr(self, "__primarylabel__", None)
+        if merge_label is None:
+            return "".join(":" + cypher_escape(label)
+                           for label in sorted(self.labels()))
+        if self.labels():
+            return ":" + cypher_escape(merge_label)
+
+        return ""
+
+    def primary_properties_str(self):
+        from py2neo.database.cypher import cypher_repr
+        """Returns primary properties as prepared str for cypher"""
+        merge_keys = getattr(self, "__primarykey__", None)
+        if merge_keys is None:
+            merge_keys = ()
+        elif is_collection(merge_keys):
+            merge_keys = tuple(merge_keys)
+        else:
+            merge_keys = (merge_keys,)
+
+        if merge_keys:
+            return cypher_repr({k: v for k, v in dict(self).items()
+                                if k in merge_keys})
+        return cypher_repr(dict(self))
 
     @deprecated("Node.match() is deprecated, use graph.match(node, ...) instead")
     def match(self, rel_type=None, other_node=None, limit=None):

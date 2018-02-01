@@ -250,14 +250,23 @@ class RelatedObjects(object):
             tx.merge(related_object)
         tx.process()
         # 2a. remove any relationships not in list of nodes
-        subject_id = remote(self.node)._id
-        tx.run("MATCH %s WHERE id(a) = {x} AND NOT id(b) IN {y} DELETE _" % self.__relationship_pattern,
-               x=subject_id, y=[remote(obj.__ogm__.node)._id for obj, _ in related_objects])
+        relationship = self.__relationship_pattern
+        relationship = relationship.replace('(a)', '(a%s %s)' %
+                                            (self.node.primary_labels_str(),
+                                             self.node.primary_properties_str()))
+
+        tx.run("MATCH %s DELETE _" % relationship)
+
         # 2b. merge all relationships
         for related_object, properties in related_objects:
-            tx.run("MATCH (a) WHERE id(a) = {x} MATCH (b) WHERE id(b) = {y} "
-                   "MERGE %s SET _ = {z}" % self.__relationship_pattern,
-                   x=subject_id, y=remote(related_object.__ogm__.node)._id, z=properties)
+            a_labels = self.node.primary_labels_str()
+            a_props = self.node.primary_properties_str()
+            b_labels = related_object.__ogm__.node.primary_labels_str()
+            b_props = related_object.__ogm__.node.primary_properties_str()
+
+            tx.run("MATCH (a%s %s) MATCH (b%s %s) MERGE %s SET _ = $z" %
+                   (a_labels, a_props, b_labels, b_props,
+                    self.__relationship_pattern), z=properties)
         tx.commit()
 
 
