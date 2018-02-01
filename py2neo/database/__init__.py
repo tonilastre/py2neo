@@ -106,6 +106,8 @@ class DBMS(object):
     __graph = None
 
     def __new__(cls, *uris, **settings):
+        # TODO: DBMS does not support bolt, create a logic for it instead of hardcoded values
+        settings = {'bolt': True, 'secure': False, 'host': 'localhost', 'bolt_port': 7687}
         address = register_server(*uris, **settings)
         http_uri = address.http_uri("/")
         try:
@@ -113,7 +115,8 @@ class DBMS(object):
         except KeyError:
             inst = super(DBMS, cls).__new__(cls)
             inst.address = address
-            inst.__remote__ = Resource(http_uri)
+            # inst.__remote__ = Resource(http_uri)
+            inst.__remote__ = Resource(address.bolt_uri("/"))
             inst.__graph = None
             cls.__instances[address] = inst
         return inst
@@ -331,7 +334,9 @@ class Graph(object):
                                                    auth=None if auth is None else auth.bolt_auth_token,
                                                    encrypted=address.secure,
                                                    user_agent="/".join(PRODUCT))
+                inst.transaction_uri = Resource(address.bolt_uri("/transaction")).uri.string
                 inst.transaction_class = BoltTransaction
+                inst.__remote__ = Resource(address.bolt_uri("/"))
             inst.node_selector = NodeSelector(inst)
             cls.__instances[key] = inst
         return inst
