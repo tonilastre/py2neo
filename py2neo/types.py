@@ -310,7 +310,7 @@ class Subgraph(object):
                                        for label in sorted(node.labels()))
 
                 params = cypher_repr(dict(self))
-                writes.append("CREATE (%s%s {%s})" % (node_id, label_string, params))
+                writes.append("CREATE (%s%s %s)" % (node_id, label_string, params))
                 parameters[param_id] = dict(node)
                 node._set_remote_pending(tx)
             returns[node_id] = node
