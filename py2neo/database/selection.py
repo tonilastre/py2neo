@@ -29,7 +29,7 @@ def _property_equality_conditions(properties, offset=1):
             condition += " IN {%d}" % i
             parameters = {"%d" % i: list(value)}
         else:
-            condition += " = {%d}" % i
+            condition += " = $%d" % i
             parameters = {"%d" % i: value}
         yield condition, parameters
 
