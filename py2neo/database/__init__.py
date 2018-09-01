@@ -107,7 +107,7 @@ class DBMS(object):
 
     def __new__(cls, *uris, **settings):
         # TODO: DBMS does not support bolt, create a logic for it instead of hardcoded values
-        settings = {'bolt': True, 'secure': False, 'host': 'localhost', 'bolt_port': 7687}
+        settings = {'bolt': True, 'secure': True, 'host': 'localhost', 'bolt_port': 7687}
         address = register_server(*uris, **settings)
         http_uri = address.http_uri("/")
         try:
